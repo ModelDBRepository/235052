@@ -1,0 +1,64 @@
+<html>
+<hr/>
+ Paradoxical role gain-of-function BK channels: effect of fAHP
+<hr/>
+
+<p>Title: A computational model for how the fast afterhyperpolarization paradoxically increases gain in regularly firing neurons <p/>
+Jaffe, D.B. and Brenner R*.
+</p>
+<p>Department of Biology, UTSA Neurosciences Institute, University of Texas at San Antonio, One UTSA Circle, San Antonio, TX 78249, USA.
+*Department of Cell and Integrative Physiology, University of Texas Health Science Center at San Antonio, 7703 Floyd Curl Drive, San Antonio, TX 78229, USA.
+</p>
+<p>J. Neurophysiology
+</p>
+<p>The afterhyperpolarization (AHP) is canonically viewed as a major factor underlying the
+refractory period, serving to limit neuronal firing rate. We recently reported (Wang et al, 
+J. Neurophys. 116:456, 2016) that enhancing the amplitude of the fast AHP in 
+a relatively slowly firing neuron (versus fast spiking neurons), augments neuronal excitability
+in dentate gyrus granule neurons expressing gain-of-function BK channels. Here we present a novel, 
+quantitative hypothesis for how varying the amplitude of the fast AHP (fAHP) can, paradoxically, 
+influence a subsequent spike tens of milliseconds later.
+</p>
+<hr/>
+Simulation
+<hr/>
+
+<p>Reproduces Figure2C1 using Neuron (<a href="https://neuron.yale.edu/neuron/">https://neuron.yale.edu/neuron/</a>)
+</p>
+<hr/>
+Files
+<hr/>
+
+<ul>
+  <li/>Fig2.hoc - Main simulation script
+<li/>6018866b.nrn - Dentate gyrus granule cell morphology (Claiborne lab)
+<li/>PlotFig2.py - Python script to plot simulation output (imports csv, matplotlib and numpy)
+<li/>mods/afKDR.mod - fast KDR - Aradi and Holmes, 1999
+<li/>mods/asKDR.mod - slow KDR - Aradi and Holmes, 1999
+<li/>mods/DGCaT.mod - T-type Ca channel - Huguenard and McCormick, 1992; Mainen and Sejnowski, 1996
+<li/>mods/migNa.mod - Na channel - Lazarewicz, Migliore, and Ascoli, 2002
+</ul></p>
+<hr/>
+Installation
+<hr/>
+
+<p>Compile all files in the mods folder to generate special executable. In unix/linux type a command like:<p/>
+  nrnivmodl mods
+  <p>If you need extra help in this above step for your platform, please consult this web page: <a href="https://senselab.med.yale.edu/ModelDB/NEURON_DwnldGuide.cshtml">https://senselab.med.yale.edu/ModelDB/NEURON_DwnldGuide.cshtml</a>
+</p>
+<hr/>
+Run simulation
+<hr/>
+
+<p>nrngui Fig2.hoc
+</p>
+Takes just a few minutes to run and generates output files 1 through 4. You may need to exit Neuron to have the last output file have its contents flushed to disk.
+<hr/>
+Plot output
+<hr/>
+
+<p>python PlotFig2.py</p>
+
+You should see graphs of voltage trajectories and this one similar to Fig 2C1 in the paper:<p/>
+<img src="./screenshot2.png" width="550" alt="screenshot"><p/>
+</html>

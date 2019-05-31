@@ -1,0 +1,344 @@
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+//		Figure 2 from Jaffe and Brenner, J. Neurophys., 2017 (in press)
+//   	Dentate gyrus granule cell model: paradoxical effect of varying AHP amplitude on firing rate
+// 		
+//
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+celsius = 25					// temperature
+VREST = -80					    //resting potential
+
+//  Independent Parameters List ------------------------------------------------------------------------
+
+// Passive properties
+
+RM = 38000					//membrane resistivity
+RI = 200					//input resistance
+CM = 1						//membrane conductivity
+
+// Controls
+
+ISTEP = .065				//step amplitude in nA
+IDUR = 2000					//duration of the current step
+
+TSTOP = 2000				//duration of the simulation
+
+//  Geometry of the cell ------------------------------------------------------------------------
+
+ropen("601886b.nrn")		// Claiborne DG granule cell
+
+ncompartments=fscan()		// Number of compartments
+
+// arrays
+
+double comp[ncompartments],par[ncompartments],x[ncompartments],y[ncompartments],z[ncompartments]
+double len[ncompartments],d[ncompartments]
+
+for i=0,ncompartments-1 {			/* read in dendritic parameters */
+	comp[i] = fscan()				// compartment number
+	par[i] = fscan()				// parent compartment
+	x[i] = fscan()					// x coordinate
+	y[i] = fscan()					// y coordinate
+	z[i] = fscan()					// z coordinate
+	len[i] = fscan()				// compartment length
+	d[i] = fscan()					// compartment diameter
+}
+
+create cell[ncompartments], hillock, mfiber		/* creates the major regions */
+
+cell[0] {nseg=1 L=len[0] diam = d[0]}			/* soma dimensions */
+
+dredux = .64		      				// Rescale all dendrites by this factor
+
+for i=1,ncompartments-1 {				/* all other soma/dendritic compartments */
+cell[i] {nseg=1 pt3dadd(x[par[i]],y[par[i]],z[par[i]],d[par[i]]*dredux) pt3dadd(x[i],y[i],z[i],d[i]*dredux)}
+}
+
+for i=1,ncompartments-1 {				/* connect the soma/dendrites */
+	cell[par[i]] connect cell[i](0),1    
+}  
+
+// AXON and AIS
+
+hillock { L=100 diam(0:1)=1.4:0.5 nseg = 50}  		// Axon initial segment
+
+mfiber { L=1000 diam=0.5 nseg = 100}  				// Axon proper
+
+cell[0] connect hillock(0),0  						// connect the soma ot the AIS to the axon
+hillock connect mfiber(0),1
+
+proxlimit = 80									// maximum limit in microns of the proximal region
+
+objref AIS, prox, stim, dend, axon, ahp			// Create objects for subsections
+
+proc subsets() { local i      	    			// procedure defines subsections
+
+    // three subsections: soma/prox region, dendrites, AIS, and axon
+	// AIS and axon are only here for future extensibility and serve no function
+
+	objref AIS, prox, stim, dend, axon, ahp			// Create objects
+
+	prox = new SectionList()	
+	dend = new SectionList()
+	
+	access cell[0]
+	distance()
+	for i=0,ncompartments-1 {					// define which dendrites are proximal
+		 access cell[i]
+		 howfar = distance(1)
+		 if (howfar < proxlimit) cell[i]  prox.append()
+		 if (howfar >=proxlimit) cell[i]  dend.append()
+	}
+								
+	AIS = new SectionList()
+	axon = new SectionList()
+
+	hillock AIS.append()						// the hillock is the AIS			   mfiber axon.append()						   // mfiber is the axon
+
+}
+subsets()						// run the procedure
+
+
+//  Parameter initialization ------------------------------------------------------------------------
+
+forsec prox {						// Somatic conductances
+
+	insert NaM99SL					// Lazarewicz, Migliore, and Ascoli (2002) Na channel
+	gbar_NaM99SL = .035				// g_Na
+	
+	insert fKDR						// Aradi and Holmes (1999) fast and slow KDR channels
+	gbar_fKDR = .003				// g_fKDR
+	
+	insert sKDR
+	gbar_sKDR = .03					// g_fKDR
+
+	// T-channel 
+
+	insert DGCaT					// Huguenard and McCormick (1992); Mainen and Sejnowski (1996)
+	gcat_DGCaT = .0035	 			// g_CaT
+	mshift_DGCaT = 15				// + valuies shift m in positive direction
+	hshift_DGCaT = -10  			// + values shifts h in negative direction
+
+}
+
+forsec dend{						// dendritic conductances
+
+    insert NaM99SL
+    gbar_NaM99SL = .003				// low Na channel density in dendrites
+
+	insert fKDR   				
+	gbar_fKDR = .003
+
+}
+
+access hillock						// AIS conductances
+
+insert NaM99SL
+gbar_NaM99SL = .1
+	
+insert fKDR
+gbar_fKDR = .05
+
+access mfiber						// axon channels
+insert NaM99SL
+gbar_NaM99SL = .1
+	
+insert fKDR
+gbar_fKDR = .1
+	
+
+//  Basic parameters for all compartments  ------------------------------------------------------------------------
+
+
+forall {
+    v = VREST
+
+    Ra = RI
+    cm = CM
+    
+    ek = -90
+    ena = 60
+
+    insert pas
+    g_pas = 1/RM
+
+	e_pas = v 
+
+}
+
+//  Reinitialization procedure  ------------------------------------------------------------------------
+
+
+proc init() {
+
+forall {
+    v = VREST						// all compartments reset Vrest
+}
+
+forsec prox {
+	v = VREST					// Redundant resetting of Vrest
+	
+	finitialize(v)					// Initialize all variables to Vrest
+	fcurrent()					// Generate currents at Vrest
+	
+	e_pas = v + (ina + ik + ica)/g_pas		// calculate E_leak for resting currents
+}
+
+forsec axon {
+	v = VREST					// Redundant resetting of Vrest
+	finitialize(v)
+	fcurrent()
+	e_pas = v + (ina+ik)/g_pas			// E_leak
+}
+
+
+forsec AIS {						// hillock/AIS resetting
+	v = VREST
+
+	finitialize(v)
+	fcurrent()
+	e_pas = v + (ina + ik)/g_pas
+}
+
+forsec dend {						// dendrites resetting
+	v = VREST
+
+	finitialize(v)
+	fcurrent()
+	e_pas = v + (ina + ik)/g_pas
+}
+
+}							
+
+//  Current step controls  ------------------------------------------------------------------------
+
+init()							// Initialize model
+
+//  Current step controls  ------------------------------------------------------------------------
+
+access cell[0]
+stim = new IClamp(.5)
+stim.del = 10
+stim.dur = IDUR
+stim.amp = ISTEP	
+
+//  AHP modifier controls  ------------------------------------------------------------------------
+
+ahp = new AlphaSynapse(.5)
+ahp.onset = 5000
+ahp.tau = 1
+ahp.e = -90
+ahp.gmax = 0.07
+
+// Start of the four simulations  ------------------------------------------------------------------------
+
+//////  Simulation 1 - largest AHP /////////
+
+t=0	    	     		  		// reset time
+
+wopen("output1.dat")			// output file
+
+count = -100					// counter that spaces AHP between spikes
+
+while (t<TSTOP){				// simulation loop
+      
+	if ((cell[0].v > 0) && (count <=0 )){			// Did the cell fire?
+		ahp.onset = t + 1.5   	  		        	// start controlling the AHP  in 1.5 milliseconds
+		count = 300   								// Reset counter to 300 
+	}
+	
+	count -= 1					// decrement counter
+	
+
+	// output parameters you to analyze
+	
+	fprint("%g %g %g %g %g %g %g %g %g %g %g\n",t,cell[0].v, hillock.v(.5), cell[119].v, ina, m_DGCaT^2,h_DGCaT, ica, m_NaM99SL^3, h_NaM99SL, ik)
+	
+	fadvance()					// advance simulation one time step
+}
+
+//////  Simulation 2 - second to largest AHP /////////
+
+t=0								// reset time
+
+init()							
+
+wopen("output2.dat")			// output file
+
+while (t<TSTOP){				// simulation loop
+
+	if ((cell[0].v > 0) && (count <=0 )){		// Did the cell fire?
+		ahp.e = -90								
+		ahp.gmax = .005*10*.4
+		ahp.tau = 1
+		ahp.onset = t + 1.5
+		count = 300
+	}
+	
+	count -= 1					// counter
+
+	fprint("%g %g %g %g %g %g %g %g %g %g %g\n",t,cell[0].v, hillock.v(.5), cell[119].v, ina, m_DGCaT^2,h_DGCaT, cell[0].ica, m_NaM99SL^3, h_NaM99SL, ik)
+
+
+	fadvance()
+}
+
+//////  Simulation 3  -  second to smallest AHP /////////
+
+t = 0								// reset time
+
+init()								// initialize state variables
+
+wopen("output3.dat")				// output file
+
+while (t<TSTOP){					// simulation loop
+
+	if ((cell[0].v > 0) && (count <=0 )){	// Did the cell fire?
+		ahp.e = -60
+		ahp.gmax = .05
+		ahp.tau = 2
+		ahp.onset = t + 1.5
+		count = 300
+	}
+	
+	count -= 1						// counter
+	
+	// output parameters you to analyze
+
+	fprint("%g %g %g %g %g %g %g %g %g %g %g\n",t,cell[0].v, hillock.v(.5), cell[119].v, ina, m_DGCaT^2,h_DGCaT, cell[0].ica, m_NaM99SL^3, h_NaM99SL, ik)
+
+	fadvance()						// advance simulation one time step
+}
+
+//////  Simulation 4 - smallest AHP /////////
+
+t = 0							// reset time
+
+init()							// initialize state variables
+
+wopen("output4.dat")			// output file
+
+while (t<TSTOP){				// simulation loop
+
+	if ((cell[0].v > 0) && (count <=0 )){		// Did the cell fire?
+		ahp.e = -50
+		ahp.gmax = .1
+		ahp.tau = 2
+		ahp.onset = t + .2
+		count = 300
+	}
+	
+	count -= 1				// counter
+
+	// output parameters you to analyze
+
+	fprint("%g %g %g %g %g %g %g %g %g %g %g\n",t,cell[0].v, hillock.v(.5), cell[119].v, ina, m_DGCaT^2,h_DGCaT, cell[0].ica, m_NaM99SL^3, h_NaM99SL, ik)
+
+
+	fadvance()			// advance simulation one time step
+}
+
+
+
+
